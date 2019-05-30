@@ -28,35 +28,48 @@ def read_nmea_file(filename):
 
 
 # {{{
-def read_video_file(video_path):
-    ''' generator for video frame data from a file
-    :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
-        specifies video file location and filename.
-    :return: frame, timestamp
+class VideoReader:
+    '''
+    generator for video frame data from a file
     '''
 
-    print(f'reading {video_path}')
-    *path, last = video_path.split('/')
+    def __init__(self, video_path):
+        '''
+        :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
+            specifies video file location and filename.
+        :return: frame, timestamp
+        '''
 
-    # get starting timestamp from filename (in this dataset, filenames are
-    # formatted FILEyymmdd-hhmmss.extension
-    starting_timestamp = datetime.datetime.strptime(last.strip(),
-                                                    'FILE%y%m%d-%H%M%S.MP4')
-    cap = cv2.VideoCapture(video_path)
+        *path, last = video_path.split('/')
+        self.cap = cv2.VideoCapture(video_path)
+        self.starting_timestamp = datetime.datetime.strptime(
+            last.strip(),
+            'FILE%y%m%d-%H%M%S.MP4'
+        )
 
-    ret = cap.isOpened()  # only loop if capture object opened correctly
-    while ret:  # keep reading until frame doesnt exist
+        # gather metadata from file (not for use in this function)
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.frame_width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        self.frame_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.format = self.cap.get(cv2.CAP_PROP_FORMAT)
 
-        # calculate absolute timestamp
-        relative_timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)
-        timestamp = starting_timestamp + \
-            datetime.timedelta(milliseconds=relative_timestamp)
+    def __iter__(self):
+        # only start iterating if capture object is open
+        ret = self.cap.isOpened()
+        while ret:
+            # calculate absolute timestamp
+            relative_timestamp = self.cap.get(cv2.CAP_PROP_POS_MSEC)
+            timestamp = self.starting_timestamp + \
+                datetime.timedelta(milliseconds=relative_timestamp)
 
+            ret, frame = self.cap.read()  # step through to next frame
+            yield frame, timestamp
+            # there is no way to skip frames, all must be returned. Sampling
+            # must be done therefore outside this function with no cost to
+            # speed.
+        self.cap.close()
 
-        ret, frame = cap.read()  # step through to next frame
-        yield frame, timestamp
-        # there is no way to skip frames, all must be returned. Sampling must
-        # be done therefore outside this function with no cost to speed.
 # }}}
 
 
@@ -67,5 +80,6 @@ if __name__ == '__main__':
             path = rpath.strip()
             if path[-3:].upper() == 'MP4':
                 mp4s.append(path)
-    for fr, msec in read_video_file(mp4s[0], lambda x: x % 1 == 0):
+    gen = VideoReader(mp4s[0])
+    for fr, msec in gen:
         print(msec, end='\r')
