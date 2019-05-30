@@ -28,13 +28,11 @@ def read_nmea_file(filename):
 
 
 # {{{
-def read_video_file(video_path, sample_function=None):
+def read_video_file(video_path):
     ''' generator for video frame data from a file
     :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
         specifies video file location and filename.
-    :param sample_function: returns true if frame number is to be included in
-    sample
-    :return:
+    :return: frame, timestamp
     '''
 
     print(f'reading {video_path}')
@@ -46,28 +44,19 @@ def read_video_file(video_path, sample_function=None):
                                                     'FILE%y%m%d-%H%M%S.MP4')
     cap = cv2.VideoCapture(video_path)
 
-    # default sample_function
-    if sample_function is None:
-        def sample_function(n):
-            return True
-
-    frame_number = 0
     ret = cap.isOpened()  # only loop if capture object opened correctly
     while ret:  # keep reading until frame doesnt exist
-        frame_number += 1
+
+        # calculate absolute timestamp
+        relative_timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)
+        timestamp = starting_timestamp + \
+            datetime.timedelta(milliseconds=relative_timestamp)
+
 
         ret, frame = cap.read()  # step through to next frame
-
-        # yield data if contained in sample
-        if sample_function(frame_number):
-
-            relative_timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)
-
-            # calculate absolute timestamp
-            timestamp = starting_timestamp + \
-                datetime.timedelta(milliseconds=relative_timestamp)
-
-            yield frame, timestamp
+        yield frame, timestamp
+        # there is no way to skip frames, all must be returned. Sampling must
+        # be done therefore outside this function with no cost to speed.
 # }}}
 
 
