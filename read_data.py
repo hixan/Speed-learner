@@ -33,7 +33,7 @@ class VideoReader:
     generator for video frame data from a file
     '''
 
-    def __init__(self, video_path):
+    def __init__(self, video_path):  # {{{
         '''
         :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
             specifies video file location and filename.
@@ -49,26 +49,34 @@ class VideoReader:
 
         # gather metadata from file (not for use in this function)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.frame_count = self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        self.frame_width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.frame_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.format = self.cap.get(cv2.CAP_PROP_FORMAT)
+        # only start iterating if capture object is open
+        self.ret = self.cap.isOpened()
+        # }}}
+
+    def __next__(self): # {{{
+        # calculate absolute timestamp
+        relative_timestamp = self.cap.get(cv2.CAP_PROP_POS_MSEC)
+        timestamp = self.starting_timestamp + \
+            datetime.timedelta(milliseconds=relative_timestamp)
+
+        self.ret, frame = self.cap.read()  # step through to next frame
+
+        if not self.ret:  # stop iterator if no more frames
+            self.cap.release()
+            raise StopIteration()
+
+        return frame, timestamp
+        # there is no way to skip frames, all must be returned. Sampling
+        # must be done therefore outside this function with no cost to
+        # speed.
+        # }}}
 
     def __iter__(self):
-        # only start iterating if capture object is open
-        ret = self.cap.isOpened()
-        while ret:
-            # calculate absolute timestamp
-            relative_timestamp = self.cap.get(cv2.CAP_PROP_POS_MSEC)
-            timestamp = self.starting_timestamp + \
-                datetime.timedelta(milliseconds=relative_timestamp)
-
-            ret, frame = self.cap.read()  # step through to next frame
-            yield frame, timestamp
-            # there is no way to skip frames, all must be returned. Sampling
-            # must be done therefore outside this function with no cost to
-            # speed.
-        self.cap.close()
+        return self
 
 # }}}
 
