@@ -2,6 +2,7 @@ import cv2
 import pynmea2
 from collections import namedtuple
 import datetime
+from transformations import settings
 
 # set up path variables
 
@@ -53,11 +54,16 @@ class VideoReader:
         self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.format = self.cap.get(cv2.CAP_PROP_FORMAT)
+        self._ret_names = settings.ret_names
         # only start iterating if capture object is open
         self.ret = self.cap.isOpened()
         # }}}
 
-    def __next__(self): # {{{
+    def __next__(self):  # {{{
+        if self._ret_names:
+            self._ret_names = False  # only return once
+            return self.starting_timestamp.strftime('%y%m%d-%H%M%S%f'),
+
         # calculate absolute timestamp
         relative_timestamp = self.cap.get(cv2.CAP_PROP_POS_MSEC)
         timestamp = self.starting_timestamp + \
@@ -77,6 +83,9 @@ class VideoReader:
 
     def __iter__(self):
         return self
+
+    def release(self):
+        self.cap.release()
 
 # }}}
 

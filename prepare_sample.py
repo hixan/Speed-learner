@@ -14,10 +14,6 @@ thread_count = 1
 dataset = []
 dataset_lock = threading.Lock()
 
-thread_number = 0
-thread_number_lock = threading.Lock()
-
-
 # therad worker function
 def generate_data(videofile):
     frame_generator = VideoReader(videofile)
