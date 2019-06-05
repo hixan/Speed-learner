@@ -2,12 +2,18 @@ import cv2
 import numpy as np
 
 
-class settings:
+class settings:  # {{{
     ret_names = True
     verbose = False
+# }}}
 
 
 def transform_name(name, *args, **kwargs):  # {{{
+    '''generate names with consistent format according to arguments
+    :param name: name of transformation
+    :param *args: unnamed arguments to be included in the name of the transform
+    :param kwargs: named arguments include name and value in the transform
+    '''
     rval = name
     if len(args) > 0:
         rval += '-' + '-'.join(args)
@@ -20,10 +26,10 @@ def transform_name(name, *args, **kwargs):  # {{{
 # }}}
 
 
-def downsize(stream, scale=1/32, dims=None):  # {{{
-    '''
-    :param stream: iterable of frame, timestamp pairs
-    :param scale: scaling factor (ignored if dims is used)
+def resize(stream, scale=.1, dims=None):  # {{{
+    '''downsize an image stream
+    :param stream: iterable of (frame, identifier) pairs
+    :param scale: scaling factor - default .1 (ignored if dims is used)
     :param dims: (width, height) of wanted size
     '''
     if settings.ret_names:
@@ -48,6 +54,12 @@ def downsize(stream, scale=1/32, dims=None):  # {{{
 
 
 def running_average(stream, window_size=10, skip_incomplete=False):  # {{{
+    '''creates an average over a window length $window_size.
+    :param stream: iterable of (frame, identifier) pairs
+    :param window_size: number of frames to be included in running average
+    :param skip_incomplete: if true treat video with padding to enable output
+        to be the same length as the input.
+    '''
     if settings.ret_names:
         yield (*next(stream),
                transform_name('running_average', window_size=str(window_size)))
@@ -78,6 +90,14 @@ def running_average(stream, window_size=10, skip_incomplete=False):  # {{{
 
 
 def edge_detect(stream, threshold1, threshold2):  # {{{
+    ''' runs a Canny edge detection algorithm over each frame. The smaller of
+    threshold1 and threshold2 is used for edge linking. The largest is used to
+    find initial segments of strong edges. See
+    <http://en.wikipedia.org/wiki/Canny_edge_detector>
+    :param stream: iterable of (frame, identifier) pairs
+    :param threshold1: first threshold value
+    :param threshold2: second threshold value
+    '''
     if settings.ret_names:
         yield (*next(stream),
                transform_name('edge_detect', t1=threshold1, t2=threshold2))
@@ -88,14 +108,19 @@ def edge_detect(stream, threshold1, threshold2):  # {{{
 # }}}
 
 
-def limit(stream, framenumber):  # {{{
+def limit(stream, framecount):  # {{{
+    '''limit the number of frames of stream to framecount. If stream contains
+    less then $framecount pairs this has no effect.
+    :param stream: iterable of (frame, identifier) pairs
+    :param framecount: maximum number of frames to output.
+    '''
     if settings.ret_names:
-        yield (*next(stream), transform_name('limit', n=framenumber))
+        yield (*next(stream), transform_name('limit', n=framecount))
 
     for i, (frame, timestamp) in enumerate(stream):
-        if i == framenumber:
+        if i == framecount:
             if settings.verbose:
-                print('Limit:', framenumber)
+                print('Limit:', framecount)
             break
         yield frame, timestamp
 # }}}
