@@ -126,6 +126,33 @@ def limit(stream, framecount):  # {{{
 # }}}
 
 
+def mask(stream1, stream2, inverse=False):  # {{{
+    '''performs a per element multiplication between stream 1 and stream 2.
+    returns identifier from the stream with most channels. If both have the
+    same default to stream1 identifiers'''
+    gen = zip(stream1, stream2)
+    if settings.ret_names:
+        names1, names2 = next(gen)
+        yield ('(', *names1, transform_name('weight_mask'), *names2, ')')
+
+    for (f1, id1), (f2, id2) in gen:
+
+        if len(f1.shape) == len(f2.shape) and f1.shape != f2.shape:
+            raise ValueError(f'stream frames must have the same dimensions,' +
+                             f' recieved {f1.shape} and {f2.shape}')
+
+        if len(f1.shape) > len(f2.shape):
+            f1, f2 = f2, f1  # channelled image always
+            id1, id2 = id2, id1
+        if len(f1.shape) < len(f2.shape):
+            f1 = np.concatenate([f1[..., np.newaxis]]*f2.shape[2], axis=2)
+
+        if inverse:
+            yield np.multiply(f2, (256 - f1) / 256).astype(np.uint8), id1
+        yield np.multiply(f2, f1 / 256).astype(np.uint8), id1
+# }}}
+
+
 def write_video(stream, fps, actions=None, dirs=('results',)):  # {{{
     if settings.ret_names:
         actions = next(stream)
