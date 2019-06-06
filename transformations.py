@@ -1,4 +1,5 @@
 import cv2
+from pathlib import Path
 import numpy as np
 
 
@@ -153,7 +154,8 @@ def mask(stream1, stream2, inverse=False):  # {{{
 # }}}
 
 
-def write_video(stream, fps, actions=None, dirs=('results',)):  # {{{
+def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
+                overwrite=False):
     if settings.ret_names:
         actions = next(stream)
     frame, identifier = next(stream)
@@ -167,6 +169,10 @@ def write_video(stream, fps, actions=None, dirs=('results',)):  # {{{
     if settings.verbose:
         print('write_video:', frame.shape, identifier)
     name = '/'.join(dirs) + '/' + '_'.join(actions) + '.avi'
+    if not overwrite and Path(name).is_file():
+        print(f'{name} already exists. Skipping computation')
+        return name
+
 
     # initialize video writing
     out = cv2.VideoWriter(
