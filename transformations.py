@@ -9,6 +9,26 @@ class settings:  # {{{
 # }}}
 
 
+def maps(single_transform):  # {{{
+    '''descriptor to handle unpacking stream, printing verbose and ret_name option for custom transformations
+    :param single_transform:
+        callable that takes individual frame, identifier options along with any other
+        required arguments / keyword arguments and returns frame, identifier pair.
+        Other possible arguments include
+    '''
+    def generator_transformation(stream, *args, **kwargs):
+        if settings.ret_names:
+            name = single_transform.__name__
+            yield (*next(stream),
+                   transform_name(name, *map(str, args), **{k:str(v) for k, v in kwargs.items()}))
+        for frame, identifier in stream:
+            if settings.verbose:
+                print(name+':', frame.shape, 'dtype:', frame.dtype, identifier)
+            yield single_transform(frame, identifier, args, **kwargs)
+    return generator_transformation
+# }}}
+
+
 def transform_name(name, *args, **kwargs):  # {{{
     '''generate names with consistent format according to arguments
     :param name: name of transformation
