@@ -14,9 +14,11 @@ thread_count = 1
 dataset = []
 dataset_lock = threading.Lock()
 
-# therad worker function
+# thread worker function
 def generate_data(videofile):
     frame_generator = VideoReader(videofile)
+    
+    # indexes of frames to be included in sample
     frame_sample = sorted(random.sample(range(1, frame_generator.frame_count),
                                         frame_count))
     previous_frame = None
