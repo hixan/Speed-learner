@@ -64,7 +64,7 @@ class NmeaFile(pd.DataFrame):  # {{{
                     n = next(piter)
                 n2 = next(piter)
                 if type(n2) is not pynmea2.types.talker.RMC:
-                    n2 = parse_nmea_line('$GPGRMC,,,,,,,,,,,,')  # no data
+                    n2 = parse_nmea_line('$GPRMC,,,,,,,,,,,,')  # no data
                 observations.append((n, n2))
             except StopIteration:
                 break
@@ -93,9 +93,9 @@ class NmeaFile(pd.DataFrame):  # {{{
             vals['longitude'].append(lon)
             vals['latitude'].append(lat)
             vals['direction'].append(direction)
-            vals['sense_x'].append(gsense.x)
-            vals['sense_y'].append(gsense.y)
-            vals['sense_z'].append(gsense.z)
+            vals['sense_x'].append(float(gsense.x))
+            vals['sense_y'].append(float(gsense.y))
+            vals['sense_z'].append(float(gsense.z))
             vals['video_timestamp'].append(vtimestamp)
             vals['video_file'].append(filepath.stem + '.MP4')
 
