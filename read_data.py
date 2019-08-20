@@ -29,7 +29,7 @@ def read_nmea_file(filename):  # {{{
 
 # }}}
 
-class NmeaFile(pd.DataFrame):  # {{{
+class NmeaFile:  # {{{
     # reads nmea file and adjusts timestamps to correspond to video timestamps
     #
     # useful nmea sentances:
@@ -45,11 +45,12 @@ class NmeaFile(pd.DataFrame):  # {{{
     # GPGSA - sattelite info
     # GPGSV - sattelite info
 
-    def __init__(self, filepath: Path,
-                 timestampformat: str = 'FILE%y%m%d-%H%M%S.NMEA'):
+    @staticmethod
+    def DataFrame(filepath: Path,  # {{{
+                  timestampformat: str = 'FILE%y%m%d-%H%M%S.NMEA'):
 
-        columns = ('tstamp', 'latitude', 'longitude', 'sense_x', 'sense_y',
-                   'sense_z', 'speed', 'direction', 'video_timestamp',
+        columns = ('time', 'latitude', 'longitude', 'sense_x', 'sense_y',
+                   'sense_z', 'speed', 'direction', 'video_time',
                    'video_file')
 
         parsed = read_nmea_file(str(filepath))
@@ -88,7 +89,7 @@ class NmeaFile(pd.DataFrame):  # {{{
             lon = NmeaFile._ddm_to_dd(rmc.lon, mul_lon)
 
             # TODO - categorical video file?
-            vals['tstamp'].append(tstamp)
+            vals['time'].append(tstamp)
             vals['speed'].append(speed)
             vals['longitude'].append(lon)
             vals['latitude'].append(lat)
@@ -96,10 +97,10 @@ class NmeaFile(pd.DataFrame):  # {{{
             vals['sense_x'].append(float(gsense.x))
             vals['sense_y'].append(float(gsense.y))
             vals['sense_z'].append(float(gsense.z))
-            vals['video_timestamp'].append(vtimestamp)
+            vals['video_time'].append(vtimestamp)
             vals['video_file'].append(filepath.stem + '.MP4')
 
-            super().__init__(vals)
+        return pd.DataFrame(vals)  # }}}
 
     @staticmethod
     def _ddm_to_dd(ddm: str, mult: int = 1) -> float:
@@ -122,10 +123,6 @@ class NmeaFile(pd.DataFrame):  # {{{
         mins = floor(m)
         secs = (m - mins) * 60
         return degs, mins, secs, rs
-
-
-
-
 # }}}
 
 
@@ -197,4 +194,4 @@ class VideoReader:  # {{{
 
 
 if __name__ == '__main__':
-    print(NmeaFile(Path('example_data/FILE180603-225817.NMEA')).describe())
+    print(NmeaFile.DataFrame(Path('example_data/FILE180603-225817.NMEA')).describe())
