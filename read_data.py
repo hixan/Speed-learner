@@ -51,7 +51,7 @@ class NmeaFile:  # {{{
 
         columns = ('time', 'latitude', 'longitude', 'sense_x', 'sense_y',
                    'sense_z', 'speed', 'direction', 'video_time',
-                   'video_file')
+                   'video_file', 'directory')
 
         parsed = read_nmea_file(str(filepath))
         # throw away gpgsv data which happens to be at positions n, n+4, n+5,
@@ -99,16 +99,17 @@ class NmeaFile:  # {{{
             vals['sense_z'].append(float(gsense.z))
             vals['video_time'].append(vtimestamp)
             vals['video_file'].append(filepath.stem + '.MP4')
+            vals['directory'].append(filepath.parent)
 
         return pd.DataFrame(vals)  # }}}
 
-    @staticmethod
+    @staticmethod  # {{{
     def _ddm_to_dd(ddm: str, mult: int = 1) -> float:
         deg = int(ddm[:ddm.index('.')-2])
         sec = float(ddm[ddm.index('.')-2:])
-        return (deg + sec/60) * mult
+        return (deg + sec/60) * mult  # }}}
 
-    @staticmethod
+    @staticmethod  # {{{
     def _dd_to_dms(dd: float, choice: (str, str) = ('N', 'S')) -> \
             (int, int, int, str):
 
@@ -122,7 +123,7 @@ class NmeaFile:  # {{{
         m = (dd - degs) * 60
         mins = floor(m)
         secs = (m - mins) * 60
-        return degs, mins, secs, rs
+        return degs, mins, secs, rs  # }}}
 # }}}
 
 
