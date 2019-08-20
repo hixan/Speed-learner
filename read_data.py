@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from transformations import settings
 import pandas as pd
 from pathlib import Path
+from math import floor
 
 
 GSENSORD = namedtuple('GSENSORD', [*'xyz'])
@@ -54,21 +55,37 @@ class NmeaFile(pd.DataFrame):  # {{{
         parsed = read_nmea_file(str(filepath))
         # throw away gpgsv data which happens to be at positions n, n+4, n+5,
         # n+6, n+7 and group other types (gsensor, rmc, gga)
-        observations = [parsed[x+1:x+4] for x in range(0, len(parsed), 8)]
+        piter = iter(parsed)
+        observations = []
+        while True:
+            try:
+                n = next(piter)
+                while type(n) is not GSENSORD:
+                    n = next(piter)
+                n2 = next(piter)
+                if type(n2) is not pynmea2.types.talker.RMC:
+                    n2 = parse_nmea_line('$GPGRMC,,,,,,,,,,,,')  # no data
+                observations.append((n, n2))
+            except StopIteration:
+                break
 
         starting_timestamp = None  # will store the first timestamp in series
         vals = {c: [] for c in columns}
 
         # add observations to the dataframe
-        for gsense, rmc, gga in observations:
+        for gsense, rmc in observations:
+            assert type(gsense) is GSENSORD and \
+                type(rmc) is pynmea2.types.talker.RMC
             tstamp = datetime.combine(rmc.datestamp, rmc.timestamp)
             speed = rmc.spd_over_grnd * 1.852  # speed in km, originally knots
             direction = rmc.true_course  # direction in degrees from N
             if starting_timestamp is None:
                 starting_timestamp = tstamp
             vtimestamp = tstamp - starting_timestamp
-            lat = (-1 if rmc.lat_dir == 'W' else 1) * rmc.lat
-            lon = (-1 if rmc.lon_dir == 'S' else 1) * rmc.lon
+            mul_lat = -1 if rmc.lat_dir == 'S' else 1
+            mul_lon = -1 if rmc.lon_dir == 'W' else 1
+            lat = NmeaFile._ddm_to_dd(rmc.lat, mul_lat)
+            lon = NmeaFile._ddm_to_dd(rmc.lon, mul_lon)
 
             # TODO - categorical video file?
             vals['tstamp'].append(tstamp)
@@ -83,6 +100,31 @@ class NmeaFile(pd.DataFrame):  # {{{
             vals['video_file'].append(filepath.stem + '.MP4')
 
             super().__init__(vals)
+
+    @staticmethod
+    def _ddm_to_dd(ddm: str, mult: int = 1) -> float:
+        deg = int(ddm[:ddm.index('.')-2])
+        sec = float(ddm[ddm.index('.')-2:])
+        return (deg + sec/60) * mult
+
+    @staticmethod
+    def _dd_to_dms(dd: float, choice: (str, str) = ('N', 'S')) -> \
+            (int, int, int, str):
+
+        if dd < 0:
+            rs = choice[1]
+            dd = -dd
+        else:
+            rs = choice[0]
+
+        degs = floor(dd)
+        m = (dd - degs) * 60
+        mins = floor(m)
+        secs = (m - mins) * 60
+        return degs, mins, secs, rs
+
+
+
 
 # }}}
 
