@@ -10,8 +10,7 @@ GSENSORD = namedtuple('GSENSORD', [*'xyz'])
 GPSDC = namedtuple('GPSDC', ())
 
 
-# {{{
-def parse_nmea_line(line):  # handle sentances pynmea2 cant handle
+def parse_nmea_line(line):  # handle sentances pynmea2 cant handle {{{
     start, *rest = line.strip().split(',')
     if start == '$GSENSORD':  # g-sensor data
         return GSENSORD(*rest)
@@ -21,20 +20,18 @@ def parse_nmea_line(line):  # handle sentances pynmea2 cant handle
 # }}}
 
 
-# {{{
-def read_nmea_file(filename):
+def read_nmea_file(filename):  # {{{
     with open(filename, 'r') as nmea_file:
         return [parse_nmea_line(line) for line in nmea_file]
 # }}}
 
 
-# {{{
-class VideoReader:
+class VideoReader:  # {{{
     '''
     generator for video frame data from a file
     '''
 
-    def __init__(self, video_path):  # {{{
+    def __init__(self, video_path, starting_timestamp=None):  # {{{
         '''
         :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
             specifies video file location and filename.
@@ -42,11 +39,15 @@ class VideoReader:
         '''
 
         *path, last = video_path.split('/')
+        self.video_path = video_path
         self.cap = cv2.VideoCapture(video_path)
-        self.starting_timestamp = datetime.datetime.strptime(
-            last.strip(),
-            'FILE%y%m%d-%H%M%S.MP4'
-        )
+        if starting_timestamp is None:
+            self.starting_timestamp = datetime.datetime.strptime(
+                last.strip(),
+                'FILE%y%m%d-%H%M%S.MP4'
+            )
+        else:
+            self.starting_timestamp = starting_timestamp
 
         # gather metadata from file (not for use in this function)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
@@ -73,19 +74,21 @@ class VideoReader:
 
         if not self.ret:  # stop iterator if no more frames
             self.cap.release()
-            raise StopIteration()
+            raise StopIteration(f'file {self.video_path} has no more frames.')
 
         return frame, timestamp
         # there is no way to skip frames, all must be returned. Sampling
-        # must be done therefore outside this function with no cost to
-        # speed.
+        # can be done outside this function with no additional cost to
+        # efficiency.
         # }}}
 
-    def __iter__(self):
+    def __iter__(self):  # {{{
         return self
+    # }}}
 
-    def release(self):
+    def release(self):  # {{{
         self.cap.release()
+    # }}}
 
 # }}}
 

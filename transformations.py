@@ -2,6 +2,26 @@ import cv2
 from pathlib import Path
 import numpy as np
 
+###########################################
+# generators that transform video streams #
+###########################################
+# # usage:
+# from transformations import limit, resize, edge_detect, maps
+# from read_data import VideoReader
+# import cv2
+# vid = VideoReader('myvideo.mp4')
+#
+#
+# @maps  # transforms the blur function from a frame editor to a stream editor
+# def blur(frame, identifier):  # applies a blur function
+#     return cv2.medianBlur(frame, 5), identifier
+#
+# vid_limited = limit(vid, 200)  # limits the vid stream to 200 frames
+# vid_blur = blur(vid_limited)  # a 200 frame blurred video stream
+# vid_edges = edge_detect(vid_blur, 20, 150)  # with threshold values 20, 150
+# vid_small = resize(vid_edges, scale=.3)  # downscaled image by .3
+# # for canny edge detection
+
 
 class settings:  # {{{
     ret_names = True
@@ -24,7 +44,7 @@ def maps(single_transform):  # {{{
         for frame, identifier in stream:
             if settings.verbose:
                 print(name+':', frame.shape, 'dtype:', frame.dtype, identifier)
-            yield single_transform(frame, identifier, args, **kwargs)
+            yield single_transform(frame, identifier, *args, **kwargs)
     return generator_transformation
 # }}}
 
@@ -124,7 +144,7 @@ def edge_detect(stream, threshold1, threshold2):  # {{{
                transform_name('edge_detect', t1=threshold1, t2=threshold2))
     for frame, identifier in stream:
         if settings.verbose:
-            print('edge_detect:', frame.shape, identifier)
+            print('edge_detect:', frame.shape, identifier, )
         yield cv2.Canny(frame, threshold1, threshold2), identifier
 # }}}
 
@@ -174,6 +194,16 @@ def mask(stream1, stream2, inverse=False):  # {{{
 # }}}
 
 
+def skip(stream, n):  # {{{
+    if settings.ret_names:
+        yield (*next(stream),
+               transform_name('skip', n=n))
+    for i, (frame, identifier) in enumerate(stream):
+        if i%n == 0:
+            yield frame, identifier
+# }}}
+
+
 def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
                 overwrite=False):
     if settings.ret_names:
@@ -187,7 +217,7 @@ def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
         assert False
 
     if settings.verbose:
-        print('write_video:', frame.shape, identifier)
+        print('write_video:', frame.shape, identifier, )
     name = '/'.join(dirs) + '/' + '_'.join(actions) + '.avi'
     if not overwrite and Path(name).is_file():
         print(f'{name} already exists. Skipping computation')
@@ -207,8 +237,9 @@ def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
     out.write(frame)
     for frame, identifier in stream:
         if settings.verbose:
-            print('write_video:', frame.shape, identifier)
+            print('write_video:', frame.shape, identifier, )
         out.write(frame)
     out.release()
     return name
 # }}}
+
