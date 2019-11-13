@@ -2,7 +2,7 @@ import cv2
 import pynmea2
 from collections import namedtuple
 from datetime import datetime, timedelta
-from .transformations import settings
+from transformations import settings
 import pandas as pd
 from pathlib import Path
 from math import floor
@@ -18,7 +18,11 @@ def parse_nmea_line(line):  # handle sentances pynmea2 cant handle
         return GSENSORD(*rest)
     elif start == '$GPSDC':  # gps disconnected as far as i can tell
         return GPSDC()
-    return pynmea2.parse(line)
+    try:
+        return pynmea2.parse(line)
+    except pynmea2.ParseError as e:
+        raise e
+
 
 def read_nmea_file(filename):
     with open(filename, 'r') as nmea_file:
@@ -43,17 +47,34 @@ class NmeaFile:
     @staticmethod
     def DataFrame(filepath: Path,
                   timestampformat: str = 'FILE%y%m%d-%H%M%S.NMEA'):
-        'read nmea file PATH and return a dataframe.
+        '''read nmea file PATH and return a dataframe.
         This assumes the NMEA file is of the following format:
             GPGSV (useless)
             GSENSORD - usefull - gsensor data
             GPRMC - usefull - lon,lat, speed etc.
             other stuff
-        '
+
+        Columns of the dataframe is as follows:
+        | column name      | type     | description                                          |
+        |------------------+----------+------------------------------------------------------|
+        | time             | DateTime | timestamp from RMC                                   |
+        | speed            | float    | speed in Km/h from RMC                               |
+        | longitude        | float    | longitude from RMC                                   |
+        | latitude         | float    | latitude from RMC                                    |
+        | direction        | float    | direction from RMC (in degrees clockwise from north) |
+        | sense_x          | float    | GSensor Data (from GSENSORD sentance)                |
+        | sense_y          | foat     | GSensor Data (from GSENSORD sentance)                |
+        | sense_z          | float    | GSensor Data (from GSENSORD sentance)                |
+        | video_timestamp  | float    | timestamp of reading wrt start of video              |
+        | video_file       | str      | filename of the corresponding video file             |
+        | nmea_file        | str      | filename of the corresponding nmea file              |
+        | directory        | str      | directory of video and nmea file                     |
+        |------------------+----------+------------------------------------------------------|
+        '''
 
         columns = ('time', 'latitude', 'longitude', 'sense_x', 'sense_y',
-                   'sense_z', 'speed', 'direction', 'video_time',
-                   'video_file', 'directory')
+                   'sense_z', 'speed', 'direction', 'video_timestamp',
+                   'nmea_file', 'video_file', 'directory')
 
         parsed = read_nmea_file(str(filepath))
 
@@ -83,7 +104,7 @@ class NmeaFile:
             direction = rmc.true_course  # direction in degrees from N
             if starting_timestamp is None:
                 starting_timestamp = tstamp
-            vtimestamp = tstamp - starting_timestamp
+            vtimestamp = (tstamp - starting_timestamp).total_seconds()
             mul_lat = -1 if rmc.lat_dir == 'S' else 1
             mul_lon = -1 if rmc.lon_dir == 'W' else 1
             lat = NmeaFile._ddm_to_dd(rmc.lat, mul_lat)
@@ -98,8 +119,9 @@ class NmeaFile:
             vals['sense_x'].append(float(gsense.x))
             vals['sense_y'].append(float(gsense.y))
             vals['sense_z'].append(float(gsense.z))
-            vals['video_time'].append(vtimestamp)
-            vals['video_file'].append(filepath.stem + '.MP4')
+            vals['video_timestamp'].append(vtimestamp)
+            vals['video_file'].append(filepath.with_suffix('.MP4').name)  # file name with mp4 suffix
+            vals['nmea_file'].append(filepath.name)  # file name with extension
             vals['directory'].append(filepath.parent)
 
         return pd.DataFrame(vals)

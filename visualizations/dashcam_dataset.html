@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="utf-8">
+
+        <link rel="stylesheet" href="theme.css" />
+        <title>Testing D3 and Leaflet maps</title>
+        <p id="chart"></p>
+
+        <script src="d3.v4.min.js"></script>
+
+    </head>
+
+    <body>
+        <div id="stopped_hist"></div>
+        <script>
+         // set the dimensions and margins of durations histogram
+         var margin = {
+             top: 10,
+             right: 30,
+             bottom: 30,
+             left: 40
+         },
+             width = 460 - margin.left - margin.right,
+             height = 400 - margin.top - margin.bottom;
+
+         // svg to contain stopped durations hitstogram
+         var stopped_hist = d3.select("#stopped_hist")
+                              .append("svg")
+                              .attr("width", width + margin.left + margin.right)
+                              .attr("height", height + margin.top + margin.bottom)
+                              .append("g")
+                              .attr("transform",
+                                    "translate(" + margin.left + "," + margin.top + ")");
+         // load and populate all data/graphs
+         d3.json("stopped_durations.json", function(durations) {
+
+             var x = d3.scaleLinear()
+                       .domain([0, d3.max(durations, d => d)])
+                       .range([0, width]);
+             stopped_hist.append("g")
+                         .attr("transform", "translate(0," + height + ")")
+                         .call(d3.axisBottom(x));
+
+             // set the parameters for the histogram
+             var histogram = d3.histogram()
+                               .value(function(d) {
+                                   return d;
+                               })
+                               .domain(x.domain()) // then the domain of the graphic
+                               .thresholds(x.ticks(15)); // then the numbers of bins
+
+             // And apply this function to data to get the bins
+             var bins = histogram(durations);
+
+             // Y axis: scale and draw:
+             var y = d3.scaleLinear()
+                       .range([height, 0]);
+             y.domain([0, d3.max(bins, d => d.length)]); // d3.hist has to be called before the Y axis obviously
+             stopped_hist.append("g")
+                         .call(d3.axisLeft(y));
+
+             bar_colour = "#69b3a2"
+             bar_mouseover_colour = "#333330"
+             // append the bar rectangles to the svg element
+             stopped_hist.selectAll("rect")
+                         .data(bins)
+                         .enter()
+                         .append("rect")
+                         .attr("x", 1)
+                         .attr("transform", function(d) {
+                             return "translate(" + x(d.x0) + "," + y(d.length) + ")";
+                         })
+                         .attr("width", function(d) {
+                             return x(d.x1) - x(d.x0) - 1;
+                         })
+                         .attr("height", function(d) {
+                             return height - y(d.length);
+                         })
+                         .style("fill", bar_colour)
+             stopped_hist.selectAll("rect")
+                         .on("mouseover", handle_mouseover)
+                         .on("mouseout", handle_mouseout)
+             function handle_mouseover(items, idx, nodelist) {
+                 node = nodelist[idx]
+                 node.style = "fill: " + bar_mouseover_colour
+             }
+             function handle_mouseout(items, idx, nodelist) {
+                 node = nodelist[idx]
+                 node.style = "fill: " + bar_colour
+             }
+         });
+        </script>
+    </body>
+
+</html>
