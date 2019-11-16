@@ -14,6 +14,29 @@
 
     <body>
         <div id="stopped_hist"></div>
+        <style>
+         .tooltip {
+             background-color: black;
+             border: none;
+             border-radius: 5px;
+             padding: 15px;
+             min-width: 40px;
+             text-align: left;
+             color: white;
+         }
+         .bar {
+             fill: #8CD3DD;
+         }
+         .bar:hover {
+             fill: #F56C4E;
+         }
+         svg text.label {
+             fill:white;
+             font: 15px;  
+             font-weight: 400;
+             text-anchor: middle;
+         }
+        </style>
         <script>
          // set the dimensions and margins of durations histogram
          var margin = {
@@ -80,6 +103,9 @@
                          })
                          .style("fill", bar_colour)
              stopped_hist.selectAll("rect")
+                         .append("text")
+                         .text((a, b, c) => "test")
+             stopped_hist.selectAll("rect")
                          .on("mouseover", handle_mouseover)
                          .on("mouseout", handle_mouseout)
              function handle_mouseover(items, idx, nodelist) {
@@ -90,6 +116,26 @@
                  node = nodelist[idx]
                  node.style = "fill: " + bar_colour
              }
+             stopped_hist.selectAll("text")
+                         .data(bins.map(x => x.length))
+                         .enter()
+                         .append("text")
+                         .text(function(d) {
+                             console.log(d)
+                             return d;
+                         })
+                         .attr("text-anchor", "middle")
+                         .attr("x", function(d, i) {
+                             // move to the beginning of the bar      move to center of bar
+                             return i * (width / bins.length) + (width / bins.length) / 2;
+                         })
+                         .attr("y", function(d) {
+                             console.log(d)
+                             return height - (d * 4) + 14;
+                         })
+                         .attr("font-family", "sans-serif")
+                         .attr("font-size", "11px")
+                         .attr("fill", "white");
          });
         </script>
     </body>

@@ -156,16 +156,18 @@ class VideoReader:
     generator for video frame data from a file
     '''
 
-    def __init__(self, video_path, starting_timestamp=None):
+    def __init__(self, video_path: Path, starting_timestamp=None):
         '''
         :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
             specifies video file location and filename.
         :return: frame, timestamp
         '''
+        if not video_path.exists():
+            raise OSError(f'file path {video_path} does note exist.')
 
-        *path, last = video_path.split('/')
+        *path, last = video_path.parts
         self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
+        self.cap = cv2.VideoCapture(str(video_path.absolute()))
         if starting_timestamp is None:
             self.starting_timestamp = datetime.strptime(
                 last.strip(),

@@ -15,11 +15,12 @@ from tqdm import tqdm
 DATADIR = Path('../data')
 FILE_COUNT = None  # number of files to sample. None selects all files
 
-logger = logging.Logger('warnings')
+logger = logging
+logging.basicConfig(filename="gen_stopped_duration.log")
 
 sample_files : List[Path] = list(map(Path, glob(f'{DATADIR}/*/*.NMEA')))
 if FILE_COUNT is not None:
-    sample_files : List[Path] = sample(sample_files, FILE_COUNT)
+    sample_files = sample(sample_files, FILE_COUNT)
 
 stopped_durations = []
 
@@ -27,7 +28,7 @@ for f in tqdm(sample_files):
     try:
         nmea = NmeaFile.DataFrame(f)
     except ParseError:
-        logger.warning(f'\rcould not parse file {f}')
+        logger.warning(f'could not parse file {f}')
         continue  # skip this file
 
     # should only come from one file.
@@ -35,7 +36,7 @@ for f in tqdm(sample_files):
         assert nmea['video_file'].describe()['unique'] == 1
         assert nmea['nmea_file'].describe()['unique'] == 1
     except KeyError:
-        logger.warning(f'\rthere was a problem with file {f}')
+        logger.warning(f'there was a problem with file {f}')
 
     # detect stopped sections
 
