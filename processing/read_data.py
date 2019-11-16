@@ -2,7 +2,7 @@ import cv2
 import pynmea2
 from collections import namedtuple
 from datetime import datetime, timedelta
-from transformations import settings
+from .transformations import settings
 import pandas as pd
 from pathlib import Path
 from math import floor
@@ -185,6 +185,9 @@ class VideoReader:
         self._ret_names = settings.ret_names
         # only start iterating if capture object is open
         self.ret = self.cap.isOpened()
+
+    def __len__(self):
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     def __next__(self):
         if self._ret_names:
