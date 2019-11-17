@@ -4,7 +4,12 @@ data/*
 */.ipynb_checkpoints/*
 files.txt
 results/*
-__pycache__/*
-example_data/*
+**/__pycache__/**
+
+.mypy_cache
+processed_data/**
+
+old/example_data/*
+**.log
 
 **TEMP_MPY_wvf_snd.mp3
