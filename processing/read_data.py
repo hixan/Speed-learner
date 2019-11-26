@@ -157,10 +157,14 @@ class VideoReader:
     '''
 
     def __init__(self, video_path: Path, starting_timestamp=None):
-        '''
+        '''Wrapper for cv2.capture object, specific to the case of video where
+        title has the timestamp of the beginning of the video encoded. (And
+        has an NMEA file associated with the same name, but is not as
+        important)
         :param video_path: string like /media/user/device/.../YYMMDD-hhmmss.mp4
             specifies video file location and filename.
         :return: frame, timestamp
+        :raise OSError: The video filepath does not exist
         '''
         if not video_path.exists():
             raise OSError(f'file path {video_path} does note exist.')
