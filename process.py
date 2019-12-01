@@ -1,19 +1,17 @@
 from processing.frame_prediction.generate_train import generate_training_data
-from pyspark import SparkContext
+from pyspark import SparkContext  # type: ignore
 import torch
-from processing.read_data import VideoReader
 from processing.frame_prediction.naive_net import Naive
-from processing.frame_prediction.train_naive import main as train_main
-import numpy as np
+from processing.frame_prediction.train_naive import main as train_naive
+import numpy as np  # type: ignore
 from pathlib import Path
 from glob import glob
 from random import sample
-from tqdm import tqdm
 from typing import List
 import logging
 import json
-import cv2
-import time
+import cv2  # type: ignore
+
 
 def init_logging():
     logging.INFOFRAME = 21
@@ -44,8 +42,8 @@ def test_naive():
         './processed_data/frame_prediction/frames/170523-173539305301.jpg'
     )
 
-    im = cv2.imread(str(EXAMPLE))[:,:,1]
-    im2 = cv2.imread(str(EXAMPLE2))[:,:,1]
+    im = cv2.imread(str(EXAMPLE))[:, :1]
+    im2 = cv2.imread(str(EXAMPLE2))[:, :1]
 
     im_pytorch = torch.Tensor((im, im2)).reshape(1, 2, *im.shape)
     logger.log(logging.INFO, f'image dimensions: {im.shape}')
@@ -75,7 +73,7 @@ def generate_trainset():
     FILE_COUNT = None  # number of files to sample. None selects all files
     OUTPUT_DIR = Path('./processed_data/frame_prediction/')
 
-    sample_files : List[Path] = list(map(Path, glob(f'{DATADIR}/*/*.MP4')))
+    sample_files: List[Path] = list(map(Path, glob(f'{DATADIR}/*/*.MP4')))
     if FILE_COUNT is not None:
         sample_files = sample(sample_files, FILE_COUNT)
 
@@ -98,7 +96,7 @@ def generate_trainset():
             filepath,
             output_dir=OUTPUT_DIR,
             average_sps=0.2,
-            relative_chain=(0,-2,-4,-8),
+            relative_chain=(0, -2, -4, -8),
             rescale=.3,
             timefmt='%y%m%d-%H%M%S%f',
             logger=log,
@@ -112,20 +110,17 @@ def generate_trainset():
         json.dump(meta_files.reduce(reduce_meta_files), f)
 
 
-
 logger = init_logging()
 
 if __name__ == '__main__':
 
-    function = 'generate_trainset'
+    function = 'train_naive'
 
     if function == 'train_naive':
-        train_main()
+        train_naive()
 
     if function == 'test_naive':
         test_naive()
 
     if function == 'generate_trainset':
         generate_trainset()
-
-

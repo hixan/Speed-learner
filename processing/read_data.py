@@ -1,15 +1,14 @@
-import cv2
-import pynmea2
-from collections import namedtuple
+import cv2  # type: ignore
+import pynmea2  # type: ignore
 from datetime import datetime, timedelta
 from .transformations import settings
-import pandas as pd
+import pandas as pd  # type: ignore
 from pathlib import Path
 from math import floor
+from typing import NamedTuple, Dict, List, Tuple
 
-
-GSENSORD = namedtuple('GSENSORD', [*'xyz'])
-GPSDC = namedtuple('GPSDC', ())
+GSENSORD = NamedTuple('GSENSORD', (('x', int), ('y', int), ('z', int)))
+GPSDC = NamedTuple('GPSDC', ())
 
 
 def parse_nmea_line(line):  # handle sentances pynmea2 cant handle
@@ -27,6 +26,7 @@ def parse_nmea_line(line):  # handle sentances pynmea2 cant handle
 def read_nmea_file(filename):
     with open(filename, 'r') as nmea_file:
         return tuple(parse_nmea_line(line) for line in nmea_file)
+
 
 class NmeaFile:
     # reads nmea file and adjusts timestamps to correspond to video timestamps
@@ -55,21 +55,21 @@ class NmeaFile:
             other stuff
 
         Columns of the dataframe is as follows:
-        | column name      | type     | description                                          |
-        |------------------+----------+------------------------------------------------------|
-        | time             | DateTime | timestamp from RMC                                   |
-        | speed            | float    | speed in Km/h from RMC                               |
-        | longitude        | float    | longitude from RMC                                   |
-        | latitude         | float    | latitude from RMC                                    |
-        | direction        | float    | direction from RMC (in degrees clockwise from north) |
-        | sense_x          | float    | GSensor Data (from GSENSORD sentance)                |
-        | sense_y          | foat     | GSensor Data (from GSENSORD sentance)                |
-        | sense_z          | float    | GSensor Data (from GSENSORD sentance)                |
-        | video_timestamp  | float    | timestamp of reading wrt start of video              |
-        | video_file       | str      | filename of the corresponding video file             |
-        | nmea_file        | str      | filename of the corresponding nmea file              |
-        | directory        | str      | directory of video and nmea file                     |
-        |------------------+----------+------------------------------------------------------|
+|column name    |type    |description                                         |
+|---------------+--------+----------------------------------------------------|
+|time           |DateTime|timestamp from RMC                                  |
+|speed          |float   |speed in Km/h from RMC                              |
+|longitude      |float   |longitude from RMC                                  |
+|latitude       |float   |latitude from RMC                                   |
+|direction      |float   |direction from RMC (in degrees clockwise from north)|
+|sense_x        |float   |GSensor Data (from GSENSORD sentance)               |
+|sense_y        |float   |GSensor Data (from GSENSORD sentance)               |
+|sense_z        |float   |GSensor Data (from GSENSORD sentance)               |
+|video_timestamp|float   |timestamp of reading wrt start of video             |
+|video_file     |str     |filename of the corresponding video file            |
+|nmea_file      |str     |filename of the corresponding nmea file             |
+|directory      |str     |directory of video and nmea file                    |
+|---------------+--------+----------------------------------------------------|
         '''
 
         columns = ('time', 'latitude', 'longitude', 'sense_x', 'sense_y',
@@ -84,7 +84,7 @@ class NmeaFile:
             try:
                 n = next(piter)
                 while type(n) is not GSENSORD:
-                    n = next(piter) # skip to the next GSENSORD line
+                    n = next(piter)  # skip to the next GSENSORD line
                 n2 = next(piter)
                 if type(n2) is not pynmea2.types.talker.RMC:
                     n2 = parse_nmea_line('$GPRMC,,,,,,,,,,,,')  # no data
@@ -93,7 +93,7 @@ class NmeaFile:
                 break
 
         starting_timestamp = None  # will store the first timestamp in series
-        vals = {c: [] for c in columns}
+        vals: Dict[str, List] = {c: [] for c in columns}
 
         # add observations to the dataframe
         for gsense, rmc in observations:
@@ -120,7 +120,8 @@ class NmeaFile:
             vals['sense_y'].append(float(gsense.y))
             vals['sense_z'].append(float(gsense.z))
             vals['video_timestamp'].append(vtimestamp)
-            vals['video_file'].append(filepath.with_suffix('.MP4').name)  # file name with mp4 suffix
+            vals['video_file'].append(
+                filepath.with_suffix('.MP4').name)  # file name with mp4 suffix
             vals['nmea_file'].append(filepath.name)  # file name with extension
             vals['directory'].append(filepath.parent)
 
@@ -134,8 +135,8 @@ class NmeaFile:
         return (deg + sec/60) * mult
 
     @staticmethod
-    def _dd_to_dms(dd: float, choice: (str, str) = ('N', 'S')) -> \
-            (int, int, int, str):
+    def _dd_to_dms(dd: float, choice: Tuple[str, str] = ('N', 'S')) -> \
+            Tuple[int, int, float, str]:
         '''converts decimal degrees to degree minutes seconds'''
 
         if dd < 0:
@@ -221,6 +222,6 @@ class VideoReader:
         self.cap.release()
 
 
-
 if __name__ == '__main__':
-    print(NmeaFile.DataFrame(Path('example_data/FILE180603-225817.NMEA')).describe())
+    print(NmeaFile.DataFrame(Path('example_data/FILE180603-225817.NMEA'))
+          .describe())

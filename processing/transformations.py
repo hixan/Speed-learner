@@ -1,6 +1,6 @@
-import cv2
+import cv2  # type: ignore
 from pathlib import Path
-import numpy as np
+import numpy as np  # type: ignore
 
 ###########################################
 # generators that transform video streams #
@@ -23,33 +23,34 @@ import numpy as np
 # # for canny edge detection
 
 
-class settings:  # {{{
+class settings:
     ret_names = True
     verbose = False
-# }}}
 
 
-def maps(single_transform):  # {{{
-    '''descriptor to handle unpacking stream, printing verbose and ret_name option for custom transformations
+def maps(single_transform):
+    '''descriptor to handle unpacking stream, printing verbose and ret_name
+    option for custom transformations
     :param single_transform:
-        callable that takes individual frame, identifier options along with any other
-        required arguments / keyword arguments and returns frame, identifier pair.
-        Other possible arguments include
+        callable that takes individual frame, identifier options along with
+    any other required arguments / keyword arguments and returns frame,
+    identifier pair. Other possible arguments include
     '''
     def generator_transformation(stream, *args, **kwargs):
         if settings.ret_names:
             name = single_transform.__name__
             yield (*next(stream),
-                   transform_name(name, *map(str, args), **{k:str(v) for k, v in kwargs.items()}))
+                   transform_name(name, *map(str, args), **{
+                       k: str(v) for k, v in kwargs.items()
+                   }))
         for frame, identifier in stream:
             if settings.verbose:
                 print(name+':', frame.shape, 'dtype:', frame.dtype, identifier)
             yield single_transform(frame, identifier, *args, **kwargs)
     return generator_transformation
-# }}}
 
 
-def transform_name(name, *args, **kwargs):  # {{{
+def transform_name(name, *args, **kwargs):
     '''generate names with consistent format according to arguments
     :param name: name of transformation
     :param *args: unnamed arguments to be included in the name of the transform
@@ -64,10 +65,9 @@ def transform_name(name, *args, **kwargs):  # {{{
         rval += '--'.join(f'{key}={value}' for key, value in kwargs.items())
 
     return rval
-# }}}
 
 
-def resize(stream, scale=.1, dims=None):  # {{{
+def resize(stream, scale=.1, dims=None):
     '''downsize an image stream
     :param stream: iterable of (frame, identifier) pairs
     :param scale: scaling factor - default .1 (ignored if dims is used)
@@ -91,10 +91,9 @@ def resize(stream, scale=.1, dims=None):  # {{{
         if settings.verbose:
             print('downsize:', frame.shape, identifier)
         yield cv2.resize(frame, new_dims), identifier
-# }}}
 
 
-def running_average(stream, window_size=10, skip_incomplete=False):  # {{{
+def running_average(stream, window_size=10, skip_incomplete=False):
     '''creates an average over a window length $window_size.
     :param stream: iterable of (frame, identifier) pairs
     :param window_size: number of frames to be included in running average
@@ -127,10 +126,9 @@ def running_average(stream, window_size=10, skip_incomplete=False):  # {{{
             del window_objs[0]
         elif not skip_incomplete:
             yield running_average, identifier
-# }}}
 
 
-def edge_detect(stream, threshold1, threshold2):  # {{{
+def edge_detect(stream, threshold1, threshold2):
     ''' runs a Canny edge detection algorithm over each frame. The smaller of
     threshold1 and threshold2 is used for edge linking. The largest is used to
     find initial segments of strong edges. See
@@ -146,10 +144,9 @@ def edge_detect(stream, threshold1, threshold2):  # {{{
         if settings.verbose:
             print('edge_detect:', frame.shape, identifier, )
         yield cv2.Canny(frame, threshold1, threshold2), identifier
-# }}}
 
 
-def limit(stream, framecount):  # {{{
+def limit(stream, framecount):
     '''limit the number of frames of stream to framecount. If stream contains
     less then $framecount pairs this has no effect.
     :param stream: iterable of (frame, identifier) pairs
@@ -164,10 +161,9 @@ def limit(stream, framecount):  # {{{
                 print('Limit:', framecount)
             break
         yield frame, identifier
-# }}}
 
 
-def mask(stream1, stream2, inverse=False):  # {{{
+def mask(stream1, stream2, inverse=False):
     '''performs a per element multiplication between stream 1 and stream 2.
     returns identifier from the stream with most channels. If both have the
     same default to stream1 identifiers'''
@@ -191,20 +187,18 @@ def mask(stream1, stream2, inverse=False):  # {{{
         if inverse:
             yield np.multiply(f2, (256 - f1) / 256).astype(np.uint8), id1
         yield np.multiply(f2, f1 / 256).astype(np.uint8), id1
-# }}}
 
 
-def skip(stream, n):  # {{{
+def skip(stream, n):
     if settings.ret_names:
         yield (*next(stream),
                transform_name('skip', n=n))
     for i, (frame, identifier) in enumerate(stream):
-        if i%n == 0:
+        if i % n == 0:
             yield frame, identifier
-# }}}
 
 
-def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
+def write_video(stream, fps, actions=None, dirs=('results',),
                 overwrite=False):
     if settings.ret_names:
         actions = next(stream)
@@ -223,7 +217,6 @@ def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
         print(f'{name} already exists. Skipping computation')
         return name
 
-
     # initialize video writing
     out = cv2.VideoWriter(
         name,
@@ -241,5 +234,3 @@ def write_video(stream, fps, actions=None, dirs=('results',),  # {{{
         out.write(frame)
     out.release()
     return name
-# }}}
-

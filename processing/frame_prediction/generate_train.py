@@ -1,32 +1,32 @@
 from ..read_data import VideoReader
 import json
 from random import sample
-import numpy as np
+import numpy as np  # type: ignore
+
 from functools import reduce
-import cv2
+import cv2  # type: ignore
 from pathlib import Path
-from typing import List
 from operator import or_
-from typing import Tuple, Union
+from typing import Tuple, Union, Set, Dict
 import logging
+
 
 def generate_training_data(
         vid: Union[Path, VideoReader],
         output_dir: Path,
         average_sps: float,  # average samples per second
         relative_chain: Tuple[int, ...],
-        rescale: int = .3,
+        rescale: float = .3,
         timefmt: str = '%y%m%d-%H%M%S%f',
         logger: Union[logging.Logger, None] = None,
         check_processed: bool = True
 ):
     if logger is None:
-        logger = logging.Logger()  # will log messages but wont output anywhere
-    if type(vid) is not VideoReader:
-        try:
-            vid : VideoReader = VideoReader(vid)
-        except OSError:
-            raise
+        # will log messages but wont output anywhere
+        logger = logging.Logger(f'{__name__}: generate_training_data')
+    if isinstance(vid, Path):
+        vid = VideoReader(vid)
+
     args = {
         'filepath': str(vid.video_path),
         'output_dir': str(output_dir),
@@ -55,8 +55,8 @@ def generate_training_data(
             len(vid)-max(relative_chain)
         ), sample_size))
     ))
-    needed_frames = reduce(or_, map(set, framegroups), set())
-    saved_frames = {}
+    needed_frames: Set[int] = reduce(or_, map(set, framegroups), set())
+    saved_frames: Dict[int, str] = {}
 
     for i, (frame, timestamp) in enumerate(vid):
         if i in needed_frames:
@@ -66,7 +66,7 @@ def generate_training_data(
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             scaled_size = (np.array(frame.shape[::-1]) *
-                        rescale).astype('uint8')
+                           rescale).astype('uint8')
             frame = cv2.resize(frame, tuple(scaled_size))
 
             logger.log(
@@ -80,12 +80,14 @@ def generate_training_data(
             if len(needed_frames) == 0:
                 break
     logger.log(logging.INFO,
-            f'processed {len(saved_frames)} frames from {vid.video_path}.')
+               f'processed {len(saved_frames)} frames from {vid.video_path}.')
     output_meta = {
         'args': args,
         'data': [
-            {'y': saved_frames[y], 'x': list(map(lambda b: saved_frames[b], x))}
-            for y, *x in framegroups
+            {
+                'y': saved_frames[y],
+                'x': list(map(lambda b: saved_frames[b], x))
+            } for y, *x in framegroups
         ]
     }
     logger.log(logging.INFO, f'finished processing {vid.video_path}.')
