@@ -7,8 +7,22 @@ from functools import reduce
 import cv2  # type: ignore
 from pathlib import Path
 from operator import or_
-from typing import Tuple, Union, Set, Dict
+from typing import Tuple, Union, Set, Dict, Callable
 import logging
+
+
+def reduce_meta_files(l1: Dict, l2: Dict):
+    args1 = l1['args']
+    args2 = l2['args']
+    fp = args1['filepath'] + '\t' + args2['filepath']
+    del args1['filepath']
+    del args2['filepath']
+
+    assert args1 == args2
+    args1['filepath'] = fp
+    l1['data'] += l2['data']
+    l1['args'] = args1
+    return l1
 
 
 def generate_training_data(
@@ -16,7 +30,7 @@ def generate_training_data(
         output_dir: Path,
         average_sps: float,  # average samples per second
         relative_chain: Tuple[int, ...],
-        rescale: float = .3,
+        transform: Union[Callable, None] = None,
         timefmt: str = '%y%m%d-%H%M%S%f',
         logger: Union[logging.Logger, None] = None,
         check_processed: bool = True
@@ -32,7 +46,7 @@ def generate_training_data(
         'output_dir': str(output_dir),
         'average_sps': average_sps,
         'relative_chain': list(relative_chain),
-        'rescale': rescale,
+        'transform': transform is not None,
         'timefmt': timefmt,
     }
     output_file = (
@@ -64,10 +78,8 @@ def generate_training_data(
                 f'{timefmt}.bmp'
             )
 
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            scaled_size = (np.array(frame.shape[::-1]) *
-                           rescale).astype('uint8')
-            frame = cv2.resize(frame, tuple(scaled_size))
+            if transform is not None:
+                frame = transform(frame)
 
             logger.log(
                 logging.INFO,

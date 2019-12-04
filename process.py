@@ -1,72 +1,114 @@
-from processing.frame_prediction.generate_train import generate_training_data
+from processing.frame_prediction.naive_net import Naive
+import re
+from processing.frame_prediction.generate_train import (
+    generate_training_data, reduce_meta_files
+)
+from tools import init_logging  # type: ignore
+from processing.frame_prediction.train_naive import (
+    DashcamPredictionDataset, step
+)
+import os
+import sys
 from pyspark import SparkContext  # type: ignore
 import torch
-from processing.frame_prediction.naive_net import Naive
-from processing.frame_prediction.train_naive import main as train_naive
+from torch import nn, optim
+from functools import reduce
+from itertools import count
 import numpy as np  # type: ignore
 from pathlib import Path
 from glob import glob
-from random import sample
+from random import sample, shuffle
 from typing import List
 import logging
 import json
 import cv2  # type: ignore
 
+logger = init_logging('process')
 
-def init_logging():
-    logging.INFOFRAME = 21
-    logging.INFOFILE = 22
-    logging.addLevelName(logging.INFOFRAME, 'INFOFRAME')
-    logging.addLevelName(logging.INFOFILE, 'INFOFILE')
+logger.info('\n\n\n\n\ndebugging logger is working')
 
-    logger = logging.getLogger('process')
-    logger.setLevel(logging.INFO)
-    fh = logging.FileHandler('process.log')
-    fh.setLevel(logging.DEBUG)
-    fmtstr = '%(name)s:%(levelname)s: %(asctime)s \n%(message)s'
-    fh.setFormatter(logging.Formatter(fmtstr))
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter(fmtstr.replace('\n', '')))
-    ch.setLevel(logging.INFOFILE)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-
-    return logger
+DATADIR = Path('processed_data/frame_prediction/')
 
 
-def test_naive():
-    EXAMPLE = Path(
-        './processed_data/frame_prediction/frames/170523-173539271876.jpg'
+def reduce_metas():
+    metas = []
+    for f in glob(str(DATADIR / 'meta*')):
+        with open(f, 'r') as file:
+            metas.append(json.load(file))
+
+    with open(DATADIR / 'all_out.json', 'w') as f:
+        json.dump(reduce(reduce_meta_files, metas), f)
+    return len(metas)
+
+
+def train_naive(datalimit=None, logger=logger):
+
+    for f in glob('processed_data/frame_prediction/examples/*'):
+        os.remove(f)  # remove all old examples
+    with open('losses.txt', 'r') as f:
+        losses = json.load(f)
+    logger = logger.getChild('train_naive')
+    BATCH_SIZE = 35
+    STATE_DICTS_DIR = Path('state_dicts/frame_prediction/')
+
+    net = Naive(3, 1)
+
+    # load latest learned states
+    x = glob(str(STATE_DICTS_DIR / 'naive_state_dict') + '*')
+    latest = sorted(
+        x,
+        key=lambda x: int(re.search(r'naive_state_dict(\d+)', x).groups()[0])
+    )[-1]
+    net.load_state_dict(torch.load(latest))
+    net.eval()
+
+    n_reduced = reduce_metas()
+    logger.info(f'reduced {n_reduced} metadata files')
+
+    dataset = DashcamPredictionDataset(
+        DATADIR / 'all_out.json',
+        DATADIR / 'frames',
+        logger=logger
     )
-    EXAMPLE2 = Path(
-        './processed_data/frame_prediction/frames/170523-173539305301.jpg'
-    )
 
-    im = cv2.imread(str(EXAMPLE))[:, :1]
-    im2 = cv2.imread(str(EXAMPLE2))[:, :1]
+    # loss criterion and optimizer
+    criterion = nn.L1Loss()
+    optimizer = optim.SGD(net.parameters(), lr=0.0001, momentum=0.03)
 
-    im_pytorch = torch.Tensor((im, im2)).reshape(1, 2, *im.shape)
-    logger.log(logging.INFO, f'image dimensions: {im.shape}')
+    # loop over epochs
+    for epoch in count(len(losses)):  # loop over the dataset multiple times
+        losses.append([])
 
-    net = Naive(2, 1)
-    logger.log(logging.INFO, f'net initialized: {net}')
-    out = net(im_pytorch)[0][0].detach().numpy()
-    logger.log(logging.INFO, f'output_range: {np.min(out)}, {np.max(out)}')
-    out = out - np.min(out)
-    logger.log(logging.INFO, f'output_range: {np.min(out)}, {np.max(out)}')
-    out = out / np.max(out) * 255
-    out = out.astype('uint8')
-    logger.log(logging.INFO, f'output dimensions: {out.shape}')
-    logger.log(logging.INFO, f'output_range: {np.min(out)}, {np.max(out)}')
+        idxs = list(range(len(dataset)))
+        shuffle(idxs)
+        batches = np.array_split(idxs, len(dataset) // BATCH_SIZE)
+        logger.info(f'initiating epoch {epoch} with {len(batches)} batches.')
+        for i, indexes in enumerate(batches, 0):
+            # get the inputs; data is a list of [inputs, labels]
+            data = dataset[indexes]
+            inputs, labels = data['x'].float(), data['y'].float()
+            ident = (epoch * (10 ** int(np.log(len(batches))) + 1) + i)
+            ident = f'{str(ident):0>10}'
+            loss = step(inputs, labels, net, optimizer, criterion,
+                        log_info=(i % 20) == 0,
+                        logger=logger.getChild('step'),
+                        write_examples=True,
+                        identifier=ident)
+            logger.debug(f'processed step {ident}. Loss was {loss}')
+            losses[-1].append(loss)
+            with open('losses.txt', 'w') as f:
+                json.dump(losses, f)
 
-    cv2.imshow('input', np.concatenate((im, im2), axis=0))
-    cv2.waitKey(0)
-    cv2.imshow('output', out)
-    cv2.waitKey(0)
+        torch.save(
+            net.state_dict(),
+            f'{STATE_DICTS_DIR / "naive_state_dict"}{epoch}'
+        )
+
+    print('Finished Training')
 
 
-def generate_trainset():
-    log = logger.getChild('generate_trainset')
+def generate_trainset(logger=logger):
+    log = logging.getLogger('py4j')  # logger.getChild('generate_trainset')
 
     # Script variables
     DATADIR = Path('data')
@@ -76,32 +118,28 @@ def generate_trainset():
     sample_files: List[Path] = list(map(Path, glob(f'{DATADIR}/*/*.MP4')))
     if FILE_COUNT is not None:
         sample_files = sample(sample_files, FILE_COUNT)
-
-    def reduce_meta_files(l1, l2):
-        args1 = l1['args']
-        args2 = l2['args']
-        fp = args1['filepath'] + '\t' + args2['filepath']
-        del args1['filepath']
-        del args2['filepath']
-
-        assert args1 == args2
-        args1['filepath'] = fp
-        l1['data'] += l2['data']
-        l1['args'] = args1
-        return l1
+    completed = set()
 
     def process_video(filepath, check_processed=True):
-        print(filepath)
-        return generate_training_data(
+
+        log.error('test')
+
+        rv = generate_training_data(
             filepath,
             output_dir=OUTPUT_DIR,
             average_sps=0.2,
             relative_chain=(0, -2, -4, -8),
-            rescale=.3,
+            transform=lambda x: cv2.resize(
+                cv2.cvtColor(x, cv2.COLOR_BGR2GRAY),
+                (192, 108)
+            ),
             timefmt='%y%m%d-%H%M%S%f',
             logger=log,
             check_processed=check_processed,
         )
+        completed.add(filepath)
+        log.error(f'count for this thread: {len(completed)}\n')
+        return rv
 
     sc = SparkContext()
     video_files = sc.parallelize(sample_files)
@@ -110,17 +148,12 @@ def generate_trainset():
         json.dump(meta_files.reduce(reduce_meta_files), f)
 
 
-logger = init_logging()
-
 if __name__ == '__main__':
 
     function = 'train_naive'
 
-    if function == 'train_naive':
-        train_naive()
-
-    if function == 'test_naive':
-        test_naive()
-
-    if function == 'generate_trainset':
+    if 'generate' in sys.argv:
         generate_trainset()
+
+    if 'train' in sys.argv:
+        train_naive()

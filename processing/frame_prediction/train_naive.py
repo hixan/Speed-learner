@@ -1,5 +1,7 @@
 from .naive_net import Naive
+import random
 import numpy as np  # type: ignore
+import logging
 import torch
 from torch.utils.data import Dataset
 from torch import nn, optim
@@ -8,23 +10,51 @@ import json
 from pathlib import Path
 from typing import Dict, Union, List, Callable, Sequence
 import cv2  # type: ignore
-from matplotlib import pyplot as plt
+
 
 DATADIR = Path('processed_data/frame_prediction')
 
-
-def main():
-    # net = Naive(3, 1)
-
-    data = DashcamPredictionDataset(
-        DATADIR / 'all_out.json',
-        DATADIR / 'frames',
-        transform=None
-    )
-    DashcamPredictionDataset.show_observations(data[3, 5, 68, 657, 3857])
-
-
 Observation = Dict[str, Union[str, List[str]]]
+
+
+def step(x, y, net, optimizer, criterion, log_info=False,
+         logger=logging.Logger('step'), write_examples=None, identifier=None,
+         examples_file=None):
+
+    # zero the parameter gradients
+    optimizer.zero_grad()
+
+    # forward + backward + optimize
+    outputs = net(x)
+    loss = criterion(outputs, y)
+    loss.backward()
+    optimizer.step()
+
+    lossval = loss.item()
+
+    if not (log_info or write_examples):
+        return lossval
+
+    o = outputs.detach().numpy()
+    if log_info:
+        logger.debug(f'loss: {lossval}.\nrange: {np.min(o)}, {np.max(o)}')
+    if write_examples:
+        if identifier is None:
+            identifier = random.randint(0, 1000000000000)
+        if examples_file is None:
+            examples_file = Path('processed_data/frame_prediction/examples')
+        grid = DashcamPredictionDataset.show_observations(
+            observations={
+                'x': x,
+                'y': y - outputs
+            },
+            padding=0
+        )
+        fname = str(examples_file / f'{identifier}.bmp')
+        cv2.imwrite(fname, grid)
+        logger.info(f'wrote examples to {fname}.')
+
+    return lossval
 
 
 class DashcamPredictionDataset(Dataset):
@@ -36,12 +66,17 @@ class DashcamPredictionDataset(Dataset):
             self,
             metadata: Path,
             root_dir: Path,
-            transform: Callable = None
+            transform: Callable = None,
+            logger: Union[logging.Logger, None] = None
     ):
+        if logger is None:
+            logger = logging.Logger('DashcamPredictionDataset logger')
+        self.logger: logging.Logger = logger.getChild('DashcamPredictionDataset')
         with open(metadata, 'r') as f:
             self.meta = json.load(f)
         self.transform = transform
         self.root_dir = root_dir
+        self.logger.debug('dashcam prediction dataset instanciated succesfully.')
 
     def __len__(self):
         return len(self.meta['data'])
@@ -61,13 +96,24 @@ class DashcamPredictionDataset(Dataset):
 
     def _read_observations(self, observations: Sequence[Observation]):
 
-        y = torch.tensor([
-            cv2.imread(
-                str(self.root_dir / observation['y']),  # type: ignore
-                0
+        try:
+            y = torch.tensor([
+                cv2.imread(
+                    str(self.root_dir / observation['y']),  # type: ignore
+                    0
+                )
+                for observation in observations
+            ])
+        except ValueError:
+            self.logger.log(
+                logging.ERROR,
+                f'encountered an error with data: {[ob["y"] for ob in observations]}'
             )
-            for observation in observations
-        ])
+            return {
+                'x': torch.Tensor(),
+                'y': torch.Tensor()
+            }
+
         x = torch.tensor([
             list(map(lambda x:cv2.imread(str(self.root_dir / x), 0),
                      observation['x']))
@@ -83,6 +129,8 @@ class DashcamPredictionDataset(Dataset):
 
         grids = []
         for x, y in zip(observations['x'], observations['y']):
+            x = x.detach().numpy()
+            y = y.detach().numpy()
             y = np.expand_dims(y, 1)
             x = np.expand_dims(x, 1)
             joined = np.append(x, y, axis=0)
@@ -93,8 +141,9 @@ class DashcamPredictionDataset(Dataset):
                 ), -2, -1
             ))
 
-        grid = np.swapaxes(make_grid(grids), 0, -1)
-
-        plt.axis('off')
-        plt.imshow(grid.numpy())
-        plt.show()
+        grid = np.swapaxes(make_grid(grids), 0, -1).detach().numpy()
+        #grid -= np.min(grid)
+        #grid /= np.max(grid)
+        #grid *= 255
+        #grid = grid.astype(np.uint8)
+        return grid
