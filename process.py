@@ -3,6 +3,7 @@ import re
 from processing.frame_prediction.generate_train import (
     generate_training_data, reduce_meta_files
 )
+from processing.frame_prediction.extrapolate import main as extrapolate
 from tools import init_logging  # type: ignore
 from processing.frame_prediction.train_naive import (
     DashcamPredictionDataset, step
@@ -23,7 +24,7 @@ import logging
 import json
 import cv2  # type: ignore
 
-logger = init_logging('process')
+logger = init_logging('process', debug=True)
 
 logger.info('\n\n\n\n\ndebugging logger is working')
 
@@ -45,22 +46,15 @@ def train_naive(datalimit=None, logger=logger):
 
     for f in glob('processed_data/frame_prediction/examples/*'):
         os.remove(f)  # remove all old examples
-    with open('losses.txt', 'r') as f:
-        losses = json.load(f)
+    #with open('losses.txt', 'r') as f:
+    #    losses = json.load(f)
+    losses = []
     logger = logger.getChild('train_naive')
-    BATCH_SIZE = 35
+    BATCH_SIZE = 80
     STATE_DICTS_DIR = Path('state_dicts/frame_prediction/')
 
     net = Naive(3, 1)
-
-    # load latest learned states
-    x = glob(str(STATE_DICTS_DIR / 'naive_state_dict') + '*')
-    latest = sorted(
-        x,
-        key=lambda x: int(re.search(r'naive_state_dict(\d+)', x).groups()[0])
-    )[-1]
-    net.load_state_dict(torch.load(latest))
-    net.eval()
+    #net.load_latest(STATE_DICTS_DIR)
 
     n_reduced = reduce_metas()
     logger.info(f'reduced {n_reduced} metadata files')
@@ -73,7 +67,7 @@ def train_naive(datalimit=None, logger=logger):
 
     # loss criterion and optimizer
     criterion = nn.L1Loss()
-    optimizer = optim.SGD(net.parameters(), lr=0.0001, momentum=0.03)
+    optimizer = optim.SGD(net.parameters(), lr=.00001, momentum=0.03)
 
     # loop over epochs
     for epoch in count(len(losses)):  # loop over the dataset multiple times
@@ -92,9 +86,8 @@ def train_naive(datalimit=None, logger=logger):
             loss = step(inputs, labels, net, optimizer, criterion,
                         log_info=(i % 20) == 0,
                         logger=logger.getChild('step'),
-                        write_examples=True,
+                        write_examples=(i % 5) == 0,
                         identifier=ident)
-            logger.debug(f'processed step {ident}. Loss was {loss}')
             losses[-1].append(loss)
             with open('losses.txt', 'w') as f:
                 json.dump(losses, f)
@@ -157,3 +150,6 @@ if __name__ == '__main__':
 
     if 'train' in sys.argv:
         train_naive()
+
+    if 'extrapolate' in sys.argv:
+        extrapolate(logger=logger.getChild('extrapolate'))
