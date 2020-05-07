@@ -1,13 +1,15 @@
 from processing.frame_prediction.naive_net import Naive
-import re
+from processing.frame_prediction.Recurrant import LSTMNet
 from processing.frame_prediction.generate_train import (
     generate_training_data, reduce_meta_files
 )
+from processing.read_data import VideoReader
 from processing.frame_prediction.extrapolate import main as extrapolate
 from tools import init_logging  # type: ignore
 from processing.frame_prediction.train_naive import (
     DashcamPredictionDataset, step
 )
+from matplotlib import pyplot as plt
 import os
 import sys
 from pyspark import SparkContext  # type: ignore
@@ -26,7 +28,7 @@ import cv2  # type: ignore
 
 logger = init_logging('process', debug=True)
 
-logger.info('\n\n\n\n\ndebugging logger is working')
+logger.info('\n\n\n\n\nlogger is working')
 
 DATADIR = Path('processed_data/frame_prediction/')
 
@@ -141,15 +143,66 @@ def generate_trainset(logger=logger):
         json.dump(meta_files.reduce(reduce_meta_files), f)
 
 
+def train_lstmnet(logger):
+
+    net = LSTMNet()
+
+    criterion = nn.L1Loss()
+    optimizer = optim.SGD(net.parameters(), lr=.00001, momentum=0.03)
+
+    file = VideoReader(list(map(Path, glob(f'data/*/*.MP4')))[0])
+    next(file)  # skip meta or first frame
+
+    def frames():
+        for frame, loc in file:
+            im_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            im_sized = (cv2.resize(im_gray, (1280//2, 720//2)) / 128) - 1
+            im_tensor = (torch.tensor(im_sized)).view(
+                1, 1, 720//2, 1280//2).float()
+            yield im_tensor
+
+    def show_image(*tensors, name=None):
+        shows = [tensor.detach().numpy()[0, 0] for tensor in tensors]
+        show = ((np.concatenate(shows, axis=0) + 1) * 128).astype('uint8')
+        #plt.hist(show.flatten())
+        #plt.yscale('log')
+        #plt.show()
+        logger.info(f'showing image {name} dims {show.shape}')
+        cv2.imshow('frame', show)
+
+    fs = frames()
+    last = next(fs)
+    show = True
+    for _ in range(500):
+        print(_)
+        curr = next(fs)
+
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        out = (net(last) + 1 * 128)
+        loss = criterion(out, curr)
+        loss.backward()
+        optimizer.step()
+        if show:
+            show_image(last, out, curr)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            show = False
+
+        last = curr
+
+
 if __name__ == '__main__':
 
-    function = 'train_naive'
+    if 'generate-naive' in sys.argv:
+        generate_trainset(logger=logger.getChild('generate-naive'))
 
-    if 'generate' in sys.argv:
-        generate_trainset()
+    if 'train-naive' in sys.argv:
+        train_naive(logger=logger.getChild('train-naive'))
 
-    if 'train' in sys.argv:
-        train_naive()
+    if 'extrapolate-naive' in sys.argv:
+        extrapolate(logger=logger.getChild('extrapolate-naive'))
 
-    if 'extrapolate' in sys.argv:
-        extrapolate(logger=logger.getChild('extrapolate'))
+    if 'train-lstmnet' in sys.argv:
+        train_lstmnet(logger=logger.getChild('train-lstmnet'))

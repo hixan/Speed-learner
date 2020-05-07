@@ -1,4 +1,3 @@
-from typing import List
 import torch
 import re
 from glob import glob
@@ -37,9 +36,12 @@ class Naive(nn.Module):
         x = glob(str(directory / 'naive_state_dict') + '*')
         latest = sorted(
             x,
-            key=lambda x: int(re.search(r'naive_state_dict(\d+)', x).groups()[0])  # type: ignore
+            key=lambda x: int(
+                re.search(  # type: ignore
+                    r'naive_state_dict(\d+)',
+                    x
+                ).groups()[0]  # type: ignore
+            )
         )[-1]
         self.load_state_dict(torch.load(latest))
         self.eval()
-
-
